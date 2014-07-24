@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <opencv2/opencv.hpp>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
@@ -22,6 +23,7 @@ namespace caffe {
 template <typename Dtype>
 class Net {
  public:
+  explicit Net(const string& param_file, vector<shared_ptr<cv::Mat> >& activeImagePtrs);
   explicit Net(const NetParameter& param);
   explicit Net(const string& param_file);
   virtual ~Net() {}
@@ -136,6 +138,11 @@ class Net {
   // the weight decay multipliers
   vector<float> params_weight_decay_;
   DISABLE_COPY_AND_ASSIGN(Net);
+
+  private:
+    //< To support the situation in which we have a in-mem loaded Net and consistently feed cv::Mat to the Net to extract feature
+    bool useInMemActiveAsInput_;
+    vector<shared_ptr<cv::Mat> > activeImagePtrs_;
 };
 
 

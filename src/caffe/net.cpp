@@ -8,6 +8,7 @@
 #include "caffe/common.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/layer.hpp"
+#include "caffe/data_layers.hpp"
 #include "caffe/net.hpp"
 #include "caffe/util/io.hpp"
 #include "caffe/util/insert_splits.hpp"
@@ -20,12 +21,20 @@ using std::set;
 namespace caffe {
 
 template <typename Dtype>
-Net<Dtype>::Net(const NetParameter& param) {
+Net<Dtype>::Net(const string& param_file, vector<shared_ptr<cv::Mat> >& activeImagePtrs) 
+: useInMemActiveAsInput_(true), activeImagePtrs_(activeImagePtrs) {
+  NetParameter param;
+  ReadNetParamsFromTextFileOrDie(param_file, &param);
   Init(param);
 }
 
 template <typename Dtype>
-Net<Dtype>::Net(const string& param_file) {
+Net<Dtype>::Net(const NetParameter& param) : useInMemActiveAsInput_(false) {
+  Init(param);
+}
+
+template <typename Dtype>
+Net<Dtype>::Net(const string& param_file) : useInMemActiveAsInput_(false) {
   NetParameter param;
   ReadNetParamsFromTextFileOrDie(param_file, &param);
   Init(param);
@@ -71,6 +80,15 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     bool in_place = false;
     const LayerParameter& layer_param = param.layers(i);
     layers_.push_back(shared_ptr<Layer<Dtype> >(GetLayer<Dtype>(layer_param)));
+
+    //< Pass the activeImages to the image_data_layer if available
+    if (useInMemActiveAsInput_ && layer_param.type() == LayerParameter_LayerType_IMAGE_DATA) {
+        LOG(INFO) << "set Active Images";
+        static_cast<ImageDataLayer<Dtype>*>(layers_.back().get())->setActiveImagePtrs(activeImagePtrs_);
+    } else {
+        LOG(INFO) << "not set Active Images " << (useInMemActiveAsInput_ ? "Y" : "N");
+    }
+
     layer_names_.push_back(layer_param.name());
     LOG(INFO) << "Creating Layer " << layer_param.name();
     bool need_backward = param.force_backward();

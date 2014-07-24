@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <opencv2/opencv.hpp>
 
 #include "leveldb/db.h"
 #include "pthread.h"
@@ -151,14 +152,11 @@ class ImageDataLayer : public Layer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const bool propagate_down, vector<Blob<Dtype>*>* bottom) { return; }
 
-  virtual void ShuffleImages();
-
   virtual void CreatePrefetchThread();
   virtual void JoinPrefetchThread();
   virtual unsigned int PrefetchRand();
 
   shared_ptr<Caffe::RNG> prefetch_rng_;
-  vector<std::pair<std::string, int> > lines_;
   int lines_id_;
   int datum_channels_;
   int datum_height_;
@@ -169,6 +167,14 @@ class ImageDataLayer : public Layer<Dtype> {
   shared_ptr<Blob<Dtype> > prefetch_label_;
   Blob<Dtype> data_mean_;
   Caffe::Phase phase_;
+
+  //vector<std::pair<std::string, int> > lines_;
+  vector<shared_ptr<cv::Mat> > activeImagePtrs_;
+ public:
+  int batch_size() const;
+  void setActiveImagePtrs(vector<shared_ptr<cv::Mat> >& activeImagePtrs) {
+      activeImagePtrs_ = activeImagePtrs;
+  }
 };
 
 

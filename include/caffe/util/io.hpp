@@ -4,6 +4,7 @@
 #define CAFFE_UTIL_IO_H_
 
 #include <string>
+#include <opencv2/opencv.hpp>
 
 #include "google/protobuf/message.h"
 #include "hdf5.h"
@@ -60,6 +61,7 @@ inline void WriteProtoToBinaryFile(
   WriteProtoToBinaryFile(proto, filename.c_str());
 }
 
+bool ReadImageToDatum(const cv::Mat &cv_img_origin, const int height, const int width, Datum* datum);
 bool ReadImageToDatum(const string& filename, const int label,
     const int height, const int width, Datum* datum);
 

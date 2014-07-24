@@ -23,6 +23,11 @@ using std::pair;
 namespace caffe {
 
 template <typename Dtype>
+int ImageDataLayer<Dtype>::batch_size() const {
+  return this->layer_param_.image_data_param().batch_size();
+}
+
+template <typename Dtype>
 void* ImageDataLayerPrefetch(void* layer_pointer) {
   CHECK(layer_pointer);
   ImageDataLayer<Dtype>* layer =
@@ -49,13 +54,12 @@ void* ImageDataLayerPrefetch(void* layer_pointer) {
   const int height = layer->datum_height_;
   const int width = layer->datum_width_;
   const int size = layer->datum_size_;
-  const int lines_size = layer->lines_.size();
+  const int lines_size = layer->activeImagePtrs_.size();
   const Dtype* mean = layer->data_mean_.cpu_data();
   for (int item_id = 0; item_id < batch_size; ++item_id) {
     // get a blob
     CHECK_GT(lines_size, layer->lines_id_);
-    if (!ReadImageToDatum(layer->lines_[layer->lines_id_].first,
-          layer->lines_[layer->lines_id_].second,
+    if (!ReadImageToDatum(*(layer->activeImagePtrs_[layer->lines_id_]),
           new_height, new_width, &datum)) {
       continue;
     }
@@ -124,7 +128,7 @@ void* ImageDataLayerPrefetch(void* layer_pointer) {
       DLOG(INFO) << "Restarting data prefetching from start.";
       layer->lines_id_ = 0;
       if (layer->layer_param_.image_data_param().shuffle()) {
-        layer->ShuffleImages();
+        DLOG(INFO) << "Shuffle is disabled.";
       }
     }
   }
@@ -147,24 +151,13 @@ void ImageDataLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
   CHECK((new_height == 0 && new_width == 0) ||
       (new_height > 0 && new_width > 0)) << "Current implementation requires "
       "new_height and new_width to be set at the same time.";
-  // Read the file with filenames and labels
-  const string& source = this->layer_param_.image_data_param().source();
-  LOG(INFO) << "Opening file " << source;
-  std::ifstream infile(source.c_str());
-  string filename;
-  int label;
-  while (infile >> filename >> label) {
-    lines_.push_back(std::make_pair(filename, label));
-  }
+
+  //< Images are provided as in-mem cv::Mat
 
   if (this->layer_param_.image_data_param().shuffle()) {
-    // randomly shuffle data
-    LOG(INFO) << "Shuffling data";
-    const unsigned int prefetch_rng_seed = caffe_rng_rand();
-    prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
-    ShuffleImages();
+    DLOG(INFO) << "Shuffle is disabled.";
   }
-  LOG(INFO) << "A total of " << lines_.size() << " images.";
+  LOG(INFO) << "A total of " << activeImagePtrs_.size() << " images.";
 
   lines_id_ = 0;
   // Check if we would need to randomly skip a few data points
@@ -172,13 +165,12 @@ void ImageDataLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
     unsigned int skip = caffe_rng_rand() %
         this->layer_param_.image_data_param().rand_skip();
     LOG(INFO) << "Skipping first " << skip << " data points.";
-    CHECK_GT(lines_.size(), skip) << "Not enough points to skip";
+    CHECK_GT(activeImagePtrs_.size(), skip) << "Not enough points to skip";
     lines_id_ = skip;
   }
   // Read a data point, and use it to initialize the top blob.
   Datum datum;
-  CHECK(ReadImageToDatum(lines_[lines_id_].first, lines_[lines_id_].second,
-                         new_height, new_width, &datum));
+  CHECK(ReadImageToDatum(*(activeImagePtrs_[lines_id_]), new_height, new_width, &datum));
   // image
   const int crop_size = this->layer_param_.image_data_param().crop_size();
   const int batch_size = this->layer_param_.image_data_param().batch_size();
@@ -249,18 +241,6 @@ void ImageDataLayer<Dtype>::CreatePrefetchThread() {
   // Create the thread.
   CHECK(!pthread_create(&thread_, NULL, ImageDataLayerPrefetch<Dtype>,
         static_cast<void*>(this))) << "Pthread execution failed.";
-}
-
-template <typename Dtype>
-void ImageDataLayer<Dtype>::ShuffleImages() {
-  const int num_images = lines_.size();
-  for (int i = 0; i < num_images; ++i) {
-    const int max_rand_index = num_images - i;
-    const int rand_index = PrefetchRand() % max_rand_index;
-    pair<string, int> item = lines_[rand_index];
-    lines_.erase(lines_.begin() + rand_index);
-    lines_.push_back(item);
-  }
 }
 
 template <typename Dtype>
